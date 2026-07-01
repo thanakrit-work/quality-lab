@@ -7,7 +7,7 @@ import io.restassured.response.Response;
 import java.util.Arrays;
 import java.util.List;
 
-import static io.restassured.module.jsonschema.JsonSchemaValidator.matchesJsonSchemaInClasspath;
+import static io.restassured.module.jsv.JsonSchemaValidator.matchesJsonSchemaInClasspath;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**

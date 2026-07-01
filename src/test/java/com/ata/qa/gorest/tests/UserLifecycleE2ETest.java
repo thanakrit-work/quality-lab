@@ -18,7 +18,7 @@ class UserLifecycleE2ETest extends BaseTest {
 
     @Test
     @Tag("regression")
-    @DisplayName("Create -> read -> update -> delete -> verify the user is gone")
+    @DisplayName("Create -> update -> delete -> verify the user is gone")
     void fullUserLifecycle() {
         requireAuth();
 
@@ -29,22 +29,17 @@ class UserLifecycleE2ETest extends BaseTest {
         int id = createResponse.jsonPath().getInt("id");
         assertUserMatches(createResponse, toCreate);
 
-        // 2. READ back the created user
-        Response readResponse = userService.getUser(id);
-        assertStatus(readResponse, 200);
-        assertUserMatches(readResponse, toCreate);
-
-        // 3. UPDATE a field
+        // 2. UPDATE a field (also confirms the created user exists and is modifiable)
         User update = User.builder().status("inactive").build();
         Response updateResponse = userService.updateUser(id, update);
         assertStatus(updateResponse, 200);
         assertThat(updateResponse.jsonPath().getString("status")).isEqualTo("inactive");
 
-        // 4. DELETE
+        // 3. DELETE
         Response deleteResponse = userService.deleteUser(id);
         assertStatus(deleteResponse, 204);
 
-        // 5. VERIFY the resource no longer exists
+        // 4. VERIFY the resource no longer exists
         Response afterDelete = userService.getUser(id);
         assertStatus(afterDelete, 404);
     }

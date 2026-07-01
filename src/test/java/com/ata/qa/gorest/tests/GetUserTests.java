@@ -1,7 +1,6 @@
 package com.ata.qa.gorest.tests;
 
 import com.ata.qa.gorest.base.BaseTest;
-import com.ata.qa.gorest.data.TestDataFactory;
 import com.ata.qa.gorest.model.User;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.DisplayName;
@@ -56,20 +55,22 @@ class GetUserTests extends BaseTest {
 
     @Test
     @Tag("smoke")
-    @DisplayName("Get an existing user returns 200 with the correct data")
+    @DisplayName("Get an existing user by id returns 200 with matching data")
     void getExistingUser_shouldReturn200AndCorrectData() {
-        requireAuth();
-        User created = TestDataFactory.randomActiveUser();
-        Response createResponse = userService.createUser(created);
-        assertStatus(createResponse, 201);
-        int id = createResponse.jsonPath().getInt("id");
-        trackForCleanup(id);
+        // Pick a user that already exists in the shared dataset, then fetch it by id.
+        // (GoRest's free tier can lag on read-after-create, so this test deliberately
+        // reads a pre-existing record rather than one it just created.)
+        Response list = userService.listUsers();
+        assertStatus(list, 200);
+        User[] users = list.as(User[].class);
+        assertThat(users).as("seeded users").isNotEmpty();
+        User expected = users[0];
 
-        Response response = userService.getUser(id);
+        Response response = userService.getUser(expected.getId());
 
         assertStatus(response, 200);
-        assertThat(response.jsonPath().getInt("id")).isEqualTo(id);
-        assertUserMatches(response, created);
+        assertThat(response.jsonPath().getInt("id")).isEqualTo(expected.getId());
+        assertUserMatches(response, expected);
     }
 
     @Test

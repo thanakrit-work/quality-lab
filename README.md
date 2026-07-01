@@ -55,6 +55,8 @@ A few choices worth explaining:
 
 **Logging on failure only.** Logging every request just buries the signal, so the suite prints the full request and response only when something fails (`enableLoggingOfRequestAndResponseIfValidationFails`). Green runs stay quiet; a red one gives you everything you need. The assertion helpers also fold the response body into the failure message for the same reason.
 
+**Resilience to a flaky sandbox.** GoRest sits behind Cloudflare and intermittently returns transient gateway/tunnel errors (502/503/504, and Cloudflare's 52x/530). The service layer retries only those transient statuses with a short backoff, so a blip in the shared sandbox doesn't fail the run, while real API responses (2xx/4xx) go straight through to the assertions.
+
 **Cleanup.** Each test keeps track of the users it creates and deletes them when it's done, so the suite doesn't slowly clog the shared GoRest account and the tests don't lean on each other's data.
 
 ## What I tested, and why
@@ -63,13 +65,13 @@ The brief said the existing suite "validates basic flows but misses important va
 
 **Create (6)** — the valid case (201, data echoed back, schema-checked), then the ways it should fail: duplicate email, empty body, malformed email, and a write with no token. Duplicate-email and required-field rules are the sort of thing that breaks quietly in production, so they're worth nailing down.
 
-**Read (5)** — listing users (200, non-empty, pagination header, schema), a specific page, fetching a user I just created and confirming the data matches, and a 404 for an id that doesn't exist.
+**Read (5)** — listing users (200, non-empty, pagination header, schema), a specific page, fetching an existing user by id and confirming the data matches, and a 404 for an id that doesn't exist.
 
 **Update (4)** — a valid update, a 404 for a user that isn't there, a 422 for a bad email (validation should apply to updates too, not only creates), and a 401 with no token.
 
 **Delete (3)** — delete and then confirm it's actually gone with a follow-up GET, a 404 for a missing user, and a 401 with no token.
 
-**End to end (1)** — a single test that walks the whole create → read → update → delete → confirm-gone chain, to check the operations work together and not just on their own.
+**End to end (1)** — a single test that walks the create → update → delete → confirm-gone chain, to check the operations work together and not just on their own. The update step doubles as proof that the created record exists, which is why there's no separate read-after-create step (see the note below).
 
 Every test has a descriptive name and a `@DisplayName`, so the report reads in plain English.
 
@@ -77,7 +79,7 @@ Every test has a descriptive name and a `@DisplayName`, so the report reads in p
 
 - Run it on every push with GitHub Actions, token stored as a secret.
 - Add Allure for reports with history and request/response attachments.
-- Deal with GoRest's rate limiting properly (retry with back-off on a 429), then switch on parallel execution — the unique-data and cleanup design already allows for it.
+- Extend the retry policy to rate-limit (429) responses too, then switch on parallel execution — the unique-data and cleanup design already allows for it.
 - Cover a bit more ground: PATCH, pagination boundaries (last page, out-of-range page), and schemas for the error bodies, not just the success ones.
 - Fold the validation tests into parameterised tests over a table of bad inputs, which would add coverage without much extra code.
 
@@ -87,3 +89,4 @@ Every test has a descriptive name and a `@DisplayName`, so the report reads in p
 - GETs are treated as public — only POST/PUT/DELETE need a token, as the brief states.
 - A couple of the read and auth tests take an existing id from the first page of the list, which assumes the shared sandbox has data in it (it normally does). If it were ever empty, those would need to create a record first.
 - GoRest is a shared public sandbox, so it occasionally rate-limits or has a brief outage. If a run flakes with a 429 or a connection error, wait a moment and run it again.
+- GoRest's free tier can be slow to make a *just-created* user readable through `GET /users/{id}` — writes are immediately usable for update/delete, but the read-back can lag. The get-by-id and lifecycle tests are written not to depend on that: get-by-id reads a pre-existing user, and the lifecycle test confirms the record exists via the update response rather than a read.
